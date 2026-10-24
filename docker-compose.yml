@@ -1,0 +1,85 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: devpath-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-devpath}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-devpath}
+      POSTGRES_DB: ${POSTGRES_DB:-devpath}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - devpath-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-devpath} -d ${POSTGRES_DB:-devpath}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - devpath
+
+  api:
+    build:
+      context: ./backend
+    container_name: devpath-api
+    restart: unless-stopped
+    environment:
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      DEBUG: ${DEBUG:-false}
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-devpath}:${POSTGRES_PASSWORD:-devpath}@db:5432/${POSTGRES_DB:-devpath}
+      SECRET_KEY: ${SECRET_KEY:-dev-only-change-me-before-deploying}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-30}
+      REFRESH_TOKEN_EXPIRE_DAYS: ${REFRESH_TOKEN_EXPIRE_DAYS:-14}
+      BCRYPT_ROUNDS: ${BCRYPT_ROUNDS:-12}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
+      SEED_ON_STARTUP: ${SEED_ON_STARTUP:-true}
+      DEMO_USER_EMAIL: ${DEMO_USER_EMAIL:-demo@devpath.dev}
+      DEMO_USER_USERNAME: ${DEMO_USER_USERNAME:-demo}
+      DEMO_USER_PASSWORD: ${DEMO_USER_PASSWORD:-devpath-demo-123}
+      DEMO_USER_FULL_NAME: ${DEMO_USER_FULL_NAME:-Demo Learner}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      LOG_FORMAT: ${LOG_FORMAT:-json}
+    ports:
+      - "${API_PORT:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health/ready', timeout=3)",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - devpath
+
+  web:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: ${VITE_API_URL:-/api/v1}
+    container_name: devpath-web
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-5173}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - devpath
+
+volumes:
+  devpath-db-data:
+    driver: local
+
+networks:
+  devpath:
+    driver: bridge

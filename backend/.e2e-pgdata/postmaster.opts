@@ -1,0 +1,1 @@
+D:/Projects/skill-tracker/backend/.venv/Lib/site-packages/pgserver/pginstall/bin/postgres.exe "-D" "D:/Projects/skill-tracker/backend/.e2e-pgdata" "-h" "127.0.0.1" "-p" "55543"
